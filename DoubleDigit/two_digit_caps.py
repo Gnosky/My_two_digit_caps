@@ -10,22 +10,20 @@ import tensorflow as tf
 ###
 ### ALERT!ALERT!
 ### ---------
-import data_sew as ds
+from keras.datasets import mnist
+from MNIST2 import Data
 
+batch_size = 50
+train_length = 20000
+test_length = 1000
+valid_length = 500
+
+train = Data(train_length, batch_size)
+test = Data(test_length,batch_size)
+validation = Data(valid_length, batch_size)
 
 np.random.seed(42)
 tf.set_random_seed(42)
-
-# Our two digit data set of 4000 images
-mnist2 = ds.main()
-labels = mnist2.stitched_labels
-iamges = mnist2.stitched_imgs
-
-train_images = images[:3000]
-train_labels = images[:3000]
-validation_images = images[3000:]
-validation_labels = images[3000:]
-
 
 
 # Creates a placeholder for 28x56 images with one greyscale channel
@@ -84,7 +82,7 @@ W_init = tf.random_normal(
 		stddev=init_sigma, dtype=tf.float32, name="W_init")
 W = tf.Variable(W_init,name="W")
 
-batch_size = tf.shape(X)[0]
+
 W_tiled = tf.tile(W, [batch_size, 1, 1, 1, 1], name="W_tiled")
 
 caps1_output_expanded = tf.expand_dims(caps1_output, -1,
@@ -149,10 +147,13 @@ y_prob_squeezed = tf.squeeze(y_prob,axis=-1)
 k = 2
 # gathers the top k longest vectors from the capsule layer and their indices
 top_k_capsules = tf.nn.top_k(y_prob_squeezed,k)
+y_pred = top_k_capsules.indices
+y_pred = tf.cast(y_pred,tf.int64)
 # top_k_capsules.indices returns what numbers are predicted in the image
 # top_k_capsules.values returns the lengths of the vectors that represent the predicted numbers
 
-y = tf.placeholder(shape=[None], dtype=tf.int64, name='y')
+
+y = tf.placeholder(shape=[None,k], dtype=tf.int64, name='y')
 
 m_plus = 0.9
 m_minus = 0.1
@@ -197,6 +198,7 @@ reconstruction_mask_reshaped = tf.reshape(
 caps2_output_masked = tf.multiply(
 						caps2_output,reconstruction_mask_reshaped,
 						name="caps2_output_masked")
+
 decoder_input = tf.reshape(caps2_output_masked,
 			[-1,caps2_n_caps * caps2_n_dims],
 			name="decoder_input")
@@ -234,11 +236,11 @@ init = tf.global_variables_initializer()
 saver = tf.train.Saver()
 
 n_epochs = 1
-batch_size = 50
 restore_checkpoint = True
 
-n_iterations_per_epoch = len(train_images) // batch_size
-n_iterations_validation = len(validation_images) // batch_size
+n_iterations_per_epoch = train_length // batch_size
+n_iterations_validation = valid_length // batch_size
+print(n_iterations_per_epoch, "^$W^IPHRSERPGJSDRPGOAERJGP")
 best_loss_val = np.infty
 checkpoint_path = "./my_capsule_network"
 
@@ -249,7 +251,7 @@ with tf.Session() as sess:
 		init.run()
 	for epoch in range(n_epochs):
 		for iteration in range(1, n_iterations_per_epoch + 1):
-			X_batch, y_batch = mnist.train.next_batch(batch_size)
+			X_batch, y_batch = train.next_batch()
 			# Run the training operation and measure the loss:
 			_, loss_train = sess.run(
 				[training_op, loss],
@@ -266,8 +268,8 @@ with tf.Session() as sess:
         # measure the validation loss and accuracy:
 		loss_vals = []
 		acc_vals = []
-		for iteration in range(1, n_iterations_validation + 1):
-			X_batch, y_batch = mnist.validation.next_batch(batch_size)
+		for iteration in range(1, int(n_iterations_validation) + 1):
+			X_batch, y_batch = validation.next_batch()
 			loss_val, acc_val = sess.run(
                     [loss, accuracy],
                     feed_dict={X: X_batch.reshape([-1, 28, 56, 1]),
@@ -288,14 +290,14 @@ with tf.Session() as sess:
 		if loss_val < best_loss_val:
 			save_path = saver.save(sess, checkpoint_path)
 			best_loss_val = loss_val
-n_iterations_test = len(mnist.test.images) // batch_size
+n_iterations_test = test_length // batch_size
 with tf.Session() as sess:
 	saver.restore(sess, checkpoint_path)
 
 	loss_tests = []
 	acc_tests = []
 	for iteration in range(1, n_iterations_test + 1):
-		X_batch, y_batch = mnist.test.next_batch(batch_size)
+		X_batch, y_batch = test.next_batch()
 		loss_test, acc_test = sess.run(
 				[loss,accuracy],
 				feed_dict={X: X_batch.reshape([-1,28,56,1]),
