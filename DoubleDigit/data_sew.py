@@ -8,7 +8,7 @@ class ImageStitcher(object):
        possible overlap"""
 
     def __init__(self, img_width, images, labels, overlap_range=(-25, 0),
-                 repeated_digits=True):
+                 repeated_digits=True, tuple_ = False):
         if img_width >= images[0].shape[0] * 2 + overlap_range[1]:
             self.img_width = img_width
         else:
@@ -23,6 +23,7 @@ class ImageStitcher(object):
             self.repeated_digits = True
         else:
             self.repeated_digits = False
+        self.tuple_ = tuple_
 
     def view_image(self, image):
         plt.matshow(image, aspect='auto', cmap='gray')
@@ -82,6 +83,12 @@ class ImageStitcher(object):
             self.stitched_imgs[img] = new_image
             # print(self.original_labels[img1_idx], self.original_labels[img2_idx])
             self.stitched_labels[img] = int(str(self.original_labels[img1_idx]) + str(self.original_labels[img2_idx]))
+        if self.tuple_ is True:
+            new_labels = []
+            for i in self.stitched_labels:
+                new_labels.append([int(x) for x in str(i)])
+            self.stitched_labels = new_labels
+
 
 
     def __repr__(self):
@@ -99,9 +106,10 @@ class ImageStitcher(object):
 
 # For basic testing
 def main():
+    from keras.datasets import mnist
     (train_images, train_labels), (test_images, test_labels) = mnist.load_data()
     train_stiches = ImageStitcher(40, train_images, train_labels,
-                                  overlap_range=(-17, 0), repeated_digits=False)
+                                  overlap_range=(-17, 0), repeated_digits=False, tuple_ = True)
     train_stiches.overlap_images(4000, overlap_range=(-25, 0))
     for i in train_stiches.stitched_labels:
         s_label = str(i)

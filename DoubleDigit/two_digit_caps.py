@@ -11,16 +11,16 @@ import tensorflow as tf
 ### ALERT!ALERT!
 ### ---------
 from keras.datasets import mnist
-from MNIST2 import Data
+from MNIST2 import Data_np
 
 batch_size = 50
-train_length = 20000
-test_length = 1000
+train_length = 10000
+test_length = 5000
 valid_length = 500
 
-train = Data(train_length, batch_size)
-test = Data(test_length,batch_size)
-validation = Data(valid_length, batch_size)
+train = Data_np(train_length, batch_size)
+test = Data_np(test_length,batch_size)
+validation = Data_np(valid_length, batch_size)
 
 np.random.seed(42)
 tf.set_random_seed(42)
@@ -31,7 +31,7 @@ X = tf.placeholder(shape=[None,28,56,1], dtype=tf.float32, name="X")
 
 # The first capsule layer will have 32 * 6 * 6 capsules of 8 dimensions each
 caps1_n_maps = 32
-caps1_n_caps = caps1_n_maps * 6 * 6
+caps1_n_caps = caps1_n_maps * 6 * 20
 caps1_n_dims = 8
 
 # -----First two Convolutions-----
@@ -148,6 +148,14 @@ k = 2
 # gathers the top k longest vectors from the capsule layer and their indices
 top_k_capsules = tf.nn.top_k(y_prob_squeezed,k)
 y_pred = top_k_capsules.indices
+
+
+y_pred = tf.squeeze(y_pred)
+
+S = tf.one_hot(y_pred, depth=10)
+S = tf.reduce_sum(S, axis=1)
+
+
 y_pred = tf.cast(y_pred,tf.int64)
 # top_k_capsules.indices returns what numbers are predicted in the image
 # top_k_capsules.values returns the lengths of the vectors that represent the predicted numbers
@@ -160,7 +168,7 @@ m_minus = 0.1
 lambda_ = 0.5
 
 T = tf.one_hot(y, depth=caps2_n_caps, name="T")
-
+T = tf.reduce_sum(T,axis=1)
 
 caps2_output_norm = safe_norm(caps2_output, axis=-2,keep_dims=True,
 								name="caps2_output_norm")
@@ -174,6 +182,7 @@ absent_error_raw = tf.square(tf.maximum(0.,caps2_output_norm - m_minus),
 
 absent_error = tf.reshape(absent_error_raw, shape=(-1,10),
 						name="absent_error")
+
 
 L = tf.add(T*present_error,lambda_ * (1.0 - T) * absent_error,
 		name="L")
@@ -192,9 +201,12 @@ reconstruction_mask = tf.one_hot(reconstruction_targets,
 								depth=caps2_n_caps,
 								name="reconstruction_mask")
 
+reconstruction_mask = tf.reduce_sum(reconstruction_mask,axis=1)
+
 reconstruction_mask_reshaped = tf.reshape(
 				reconstruction_mask, [-1,1,caps2_n_caps,1,1],
 				name="reconstruction_mask_reshaped")
+
 caps2_output_masked = tf.multiply(
 						caps2_output,reconstruction_mask_reshaped,
 						name="caps2_output_masked")
@@ -226,7 +238,7 @@ alpha = 0.0005
 
 loss = tf.add(margin_loss,alpha*reconstruction_loss,name="loss")
 
-correct = tf.equal(y,y_pred, name="correct")
+correct = tf.equal(T,S, name="correct")
 accuracy = tf.reduce_mean(tf.cast(correct,tf.float32), name="accuracy")
 
 optimizer =tf.train.AdamOptimizer()
@@ -240,7 +252,6 @@ restore_checkpoint = True
 
 n_iterations_per_epoch = train_length // batch_size
 n_iterations_validation = valid_length // batch_size
-print(n_iterations_per_epoch, "^$W^IPHRSERPGJSDRPGOAERJGP")
 best_loss_val = np.infty
 checkpoint_path = "./my_capsule_network"
 
